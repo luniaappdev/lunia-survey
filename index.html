@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Lunia — pour mieux te connaître 🌙</title>
+<meta name="theme-color" content="#0F6E56">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌙%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#FAF7F2;--card:#FFFFFF;--ink:#1F1F1F;--muted:#6B6B6B;
+  --accent:#0F6E56;--accent-soft:#DDEDE6;--border:#E8E2D8;
+  --warn:#B8860B;--error:#A0522D;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;overscroll-behavior-y:contain}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  background:var(--bg);color:var(--ink);
+  font-size:17px;line-height:1.5;
+  min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;
+  -webkit-font-smoothing:antialiased;
+}
+.topbar{
+  position:sticky;top:0;z-index:10;
+  background:rgba(250,247,242,.96);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.progress{height:4px;background:var(--accent-soft)}
+.progress>div{height:100%;background:var(--accent);transition:width .3s ease}
+.sync{
+  font-size:12px;color:var(--muted);text-align:center;
+  padding:6px 12px;line-height:1.3;min-height:24px;
+}
+.sync.ok{color:var(--accent)}
+.sync.warn{color:var(--warn)}
+.sync.err{color:var(--error)}
+main{flex:1;padding:24px 20px 160px;max-width:520px;margin:0 auto;width:100%}
+.intro{text-align:center;padding:32px 20px}
+.intro h1{font-size:28px;margin:8px 0 16px;line-height:1.25}
+.intro p{color:var(--muted);font-size:16px}
+.q-title{font-size:22px;font-weight:600;margin:0 0 8px;line-height:1.3}
+.q-desc{color:var(--muted);font-size:14px;margin:0 0 24px}
+.option{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 18px;background:var(--card);
+  border:2px solid var(--border);border-radius:14px;
+  margin-bottom:10px;cursor:pointer;
+  transition:transform .12s ease,border-color .2s ease,background .2s ease;
+  font-size:16px;min-height:56px;
+}
+.option:active{transform:scale(.98)}
+.option.selected{border-color:var(--accent);background:var(--accent-soft)}
+.option .mark{
+  flex-shrink:0;width:24px;height:24px;
+  border:2px solid var(--border);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#fff;font-size:14px;
+}
+.single .option .mark{border-radius:50%}
+.option.selected .mark{background:var(--accent);border-color:var(--accent)}
+.other-input{
+  display:none;width:100%;padding:14px 16px;margin:-4px 0 10px;
+  border:2px solid var(--accent);border-radius:14px;
+  font-size:16px;font-family:inherit;background:#fff;
+}
+.other-input.visible{display:block}
+.nav{
+  position:fixed;bottom:0;left:0;right:0;
+  padding:14px 20px calc(14px + env(safe-area-inset-bottom));
+  background:rgba(250,247,242,.96);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border-top:1px solid var(--border);
+}
+.nav-inner{display:flex;gap:12px;max-width:520px;margin:0 auto;width:100%}
+.btn{
+  flex:1;padding:16px;border:none;border-radius:14px;
+  font-size:16px;font-weight:600;cursor:pointer;font-family:inherit;
+  min-height:52px;
+}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-secondary{background:var(--card);color:var(--ink);border:2px solid var(--border)}
+.skip{
+  display:block;text-align:center;color:var(--muted);font-size:14px;
+  margin-top:20px;text-decoration:underline;
+  background:none;border:none;width:100%;cursor:pointer;font-family:inherit;
+  padding:8px;
+}
+.end{text-align:center;padding:32px 20px}
+.end h1{font-size:32px;margin:8px 0 16px}
+.end p{color:var(--muted);margin-bottom:20px}
+.end-msg{
+  background:var(--accent-soft);color:var(--accent);
+  padding:14px 18px;border-radius:14px;font-size:14px;
+  margin:16px auto;max-width:400px;
+}
+details{margin-top:24px;text-align:left}
+summary{cursor:pointer;color:var(--muted);font-size:14px;padding:8px 0}
+.summary-box{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;padding:16px;margin-top:12px;
+}
+.summary-box pre{
+  white-space:pre-wrap;font-family:ui-monospace,monospace;
+  font-size:12px;margin:0;line-height:1.6;
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="progress"><div id="bar" style="width:0%"></div></div>
+  <div class="sync" id="sync"></div>
+</div>
+<main id="app"></main>
+
+<script>
+// ─── Supabase config (clés PUBLIQUES — sb_publishable_ OK dans bundle) ─────
+const SUPABASE_URL='https://hioaymokoffwmhbieitc.supabase.co';
+const SUPABASE_KEY='sb_publishable_gxvhPTChSWIvgkQm7c5mPw_b3VVJhSU';
+const SURVEY_ID='vague1-2026-05-20';
+const STORAGE_KEY='lunia-vague1-2026';
+
+// ─── Questions ────────────────────────────────────────────────────────────
+const Q=[
+{id:'1a',title:'Pour mes migraines, je dis…',desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Une crise','Un cycle','Un épisode','Une attaque','Un mal de tête','Juste « ma migraine »','Je ne suis pas migraineuse'],other:true},
+{id:'1b',title:'Pour mes douleurs de fibro, je dis…',desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Une poussée','Un flare','Une crise','Une mauvaise journée','Un épisode',"Je dis juste « j'ai mal partout »","Je n'ai pas de fibro"],other:true},
+{id:'1c',title:'Pour mes journées de fatigue extrême, je dis…',desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Un crash','Un jour brouillard','Une mauvaise journée','Un épisode',"Je suis vidée / « je n'en peux plus »",'Pas applicable pour moi'],other:true},
+{id:'1d',title:'Pour mes douleurs en bas du ventre (endo / pelvien), je dis…',desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Des crampes','Une crise','Un épisode','Des douleurs de règles','Mal en bas','Pas applicable pour moi'],other:true},
+{id:'1e',title:'Pour mes bouffées de chaleur, je dis…',desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Une bouffée','Une chaleur / une montée','Une vague','« Je brûle »',"Je n'en ai pas"],other:true},
+{id:'2',title:"Dans une semaine typique, j'ai…",type:'single',
+ opts:['1 seule chose active à la fois la plupart du temps','2 choses qui se chevauchent souvent','3 ou plus en même temps régulièrement','Ça varie tellement que je peux pas répondre'],other:true},
+{id:'2bis',title:'Si 2 ou plus se chevauchent — lesquelles ?',desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Migraine + Fibro','Migraine + Endo / pelvien','Migraine + Bouffées','Fibro + Fatigue / brouillard (EM)','Fibro + Endo','Fibro + Bouffées','Endo + Bouffées','Plus de 2 trucs à la fois, ça arrive','Aucune — chaque chose vient seule','Pas sûre'],other:true,
+ skipIf:a=>a['2']&&a['2'].picked.includes('1 seule chose active à la fois la plupart du temps')},
+{id:'3',title:'Ma douleur quotidienne…',type:'single',
+ opts:["S'arrête complètement entre les crises",'Est toujours là, juste plus ou moins forte','Ça dépend de la condition'],other:true},
+{id:'3bis',title:"Laquelle ne s'arrête jamais ?",desc:'Plusieurs choix possibles',type:'multi',
+ opts:['La fibro — douleur de fond constante','La fatigue EM — toujours présente, juste plus ou moins',"L'endo / pelvien — gêne quasi continue",'La migraine — un fond de mal de tête permanent','Les bouffées — par vagues toute la journée'],other:true,
+ skipIf:a=>a['3']&&a['3'].picked.includes("S'arrête complètement entre les crises")},
+{id:'3ter',title:"Mon niveau quand c'est « calme » (pas en crise) :",type:'single',
+ opts:['0-1 sur 10 (presque rien)','2-3 sur 10 (un fond léger)','4-5 sur 10 (déjà inconfortable)','6+ sur 10 (jamais vraiment calme)',"Je sais pas, je n'y ai jamais pensé comme ça"],
+ skipIf:a=>a['3']&&a['3'].picked.includes("S'arrête complètement entre les crises")},
+{id:'4',title:"Quand j'imagine ouvrir Lunia, ce serait surtout…",desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Le matin pour me situer','Le midi pour faire un point rapide','Le soir pour faire le bilan',"En plein milieu d'une crise, quand quelque chose me frappe",'Quand je prends un médicament',"Quand j'ai un moment calme, pas lié à un symptôme",'Avant un rendez-vous médecin','Honnêtement, je ne sais pas encore'],other:true},
+{id:'5',title:'En crise ou très fatiguée, le temps que je peux donner à une app…',type:'single',
+ opts:['10 secondes max — un clic et basta','30 secondes — saisie ultra-rapide','1 à 2 minutes — un petit formulaire ça va','Ça dépend tellement que je peux pas répondre','Je préfère pas la toucher en crise, je note plus tard'],other:true},
+{id:'6',title:'Pour les bouffées de chaleur',type:'single',
+ opts:['Je veux pouvoir noter chacune en 1 clic','Je préfère juste un résumé en fin de journée','Je veux noter seulement les pires',"Je m'en fiche de les tracker",'Pas pertinent pour moi'],other:true},
+{id:'7',title:"Si Lunia pouvait me dire UNE chose le matin qui m'aiderait vraiment, ce serait…",desc:'Plusieurs choix possibles',type:'multi',
+ opts:['Comment je vais probablement me sentir selon ma phase de cycle','Le risque que la météo me déclenche quelque chose',"Combien d'énergie j'ai à dépenser aujourd'hui sans risquer un crash","Un rappel des symptômes d'hier (récap doux)","Un mot d'encouragement / une intention pour la journée","Les médicaments que j'ai prévu de prendre","Si j'ai un rendez-vous médical prévu","Rien — j'aime pas que les apps me parlent le matin"],other:true},
+{id:'8',title:"J'aimerais que Lunia me parle…",type:'single',
+ opts:['Comme une amie chaleureuse 🤗','Comme une infirmière professionnelle 👩‍⚕️','Comme une sœur ou une mère bienveillante 💛','Le plus neutre possible, juste les faits 📊',"Avec un peu d'humour quand c'est approprié 😊",'Ça dépend de mon état (douce en crise, factuelle en bilan)'],other:true}
+];
+
+// ─── State + session ──────────────────────────────────────────────────────
+const state=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+if(!state.answers)state.answers={};
+if(state.idx===undefined)state.idx=-1;
+
+let SESSION_ID=localStorage.getItem('lunia-survey-session');
+if(!SESSION_ID){
+  SESSION_ID=(crypto&&crypto.randomUUID)?crypto.randomUUID():
+    'sess-'+Math.random().toString(36).slice(2)+'-'+Date.now();
+  localStorage.setItem('lunia-survey-session',SESSION_ID);
+}
+
+function saveLocal(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
+
+// ─── Sync vers Supabase (debounced 800ms) ─────────────────────────────────
+let syncTimer=null;
+let lastSyncStatus='';
+
+function setSyncStatus(text,cls){
+  const el=document.getElementById('sync');
+  if(!el)return;
+  el.textContent=text;
+  el.className='sync '+(cls||'');
+  lastSyncStatus=cls;
+}
+
+async function syncNow(opts){
+  opts=opts||{};
+  const finalSubmit=!!opts.finalSubmit;
+  setSyncStatus(finalSubmit?'⏳ Envoi de tes réponses…':'⏳ Sauvegarde…','');
+  const body={
+    session_id:SESSION_ID,
+    survey_id:SURVEY_ID,
+    answers:state.answers,
+    user_agent:navigator.userAgent.slice(0,200)
+  };
+  if(finalSubmit)body.submitted_at=new Date().toISOString();
+  try{
+    const res=await fetch(SUPABASE_URL+'/rest/v1/pilote_survey_responses?on_conflict=session_id',{
+      method:'POST',
+      headers:{
+        'apikey':SUPABASE_KEY,
+        'Authorization':'Bearer '+SUPABASE_KEY,
+        'Content-Type':'application/json',
+        'Prefer':'resolution=merge-duplicates,return=minimal'
+      },
+      body:JSON.stringify(body)
+    });
+    if(!res.ok){
+      const t=await res.text();
+      throw new Error('HTTP '+res.status+' '+t.slice(0,100));
+    }
+    setSyncStatus(finalSubmit?'✓ Réponses envoyées — merci 💛':'✓ Sauvegardé','ok');
+    return true;
+  }catch(e){
+    console.warn('sync failed',e);
+    setSyncStatus('⚠️ Hors ligne — sauvegardé sur ton téléphone, ça repartira tout seul','warn');
+    return false;
+  }
+}
+
+function scheduleSync(){
+  if(syncTimer)clearTimeout(syncTimer);
+  syncTimer=setTimeout(()=>syncNow(),800);
+}
+
+// Retry on reconnect
+window.addEventListener('online',()=>{if(lastSyncStatus==='warn')syncNow()});
+
+// ─── Render ───────────────────────────────────────────────────────────────
+function visQ(){return Q.filter(q=>!q.skipIf||!q.skipIf(state.answers))}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function render(){
+  const v=visQ();
+  const app=document.getElementById('app');
+  const bar=document.getElementById('bar');
+
+  if(state.idx<0){
+    bar.style.width='0%';
+    removeNav();
+    setSyncStatus('','');
+    const hasAns=Object.keys(state.answers).length>0;
+    app.innerHTML=`
+      <div class="intro">
+        <div style="font-size:56px;margin-bottom:8px">🌙</div>
+        <h1>Lunia — pour mieux te connaître</h1>
+        <p>Quelques questions, des cases à cocher. Pas besoin d'écrire si tu ne veux pas. Tu peux fermer et reprendre. Pas obligée de tout faire.</p>
+        <p style="font-size:13px;margin-top:24px;color:var(--muted)">🔒 Tes réponses sont sauvegardées au Québec (Loi 25) et seul Christophe peut les voir.</p>
+        <button class="btn btn-primary" style="margin-top:24px;padding:16px 32px;flex:none" data-action="start">${hasAns?'Reprendre où j\'en étais':'Commencer'}</button>
+        ${hasAns?'<button class="skip" data-action="reset">Effacer mes réponses et recommencer</button>':''}
+      </div>`;
+    return;
+  }
+
+  if(state.idx>=v.length){renderEnd();return}
+
+  const q=v[state.idx];
+  const ans=state.answers[q.id]||{picked:[],other:''};
+  bar.style.width=Math.round(((state.idx+1)/v.length)*100)+'%';
+
+  const opts=q.opts.map((opt,i)=>{
+    const sel=ans.picked.includes(opt);
+    const mark=sel?(q.type==='multi'?'✓':'●'):'';
+    return `<div class="option ${sel?'selected':''}" data-action="pick" data-qid="${q.id}" data-idx="${i}">
+      <div class="mark">${mark}</div><div>${esc(opt)}</div></div>`;
+  }).join('');
+
+  const oSel=ans.picked.includes('__OTHER__');
+  const oMark=oSel?(q.type==='multi'?'✓':'●'):'';
+  const otherHtml=q.other?`
+    <div class="option ${oSel?'selected':''}" data-action="pickother" data-qid="${q.id}">
+      <div class="mark">${oMark}</div><div>Autre…</div></div>
+    <input type="text" class="other-input ${oSel?'visible':''}" id="oth-${q.id}"
+           placeholder="Tape ta réponse" value="${esc(ans.other||'')}"
+           data-action="setother" data-qid="${q.id}"
+           autocapitalize="sentences" autocomplete="off" autocorrect="on">`:'';
+
+  app.innerHTML=`
+    <h2 class="q-title">${esc(q.title)}</h2>
+    ${q.desc?`<p class="q-desc">${esc(q.desc)}</p>`:''}
+    <div class="${q.type}">${opts}${otherHtml}</div>
+    <button class="skip" data-action="next">Sauter cette question →</button>`;
+
+  ensureNav();
+  document.getElementById('nav-inner').innerHTML=`
+    ${state.idx>0?`<button class="btn btn-secondary" data-action="prev">← Retour</button>`:`<div style="flex:1"></div>`}
+    <button class="btn btn-primary" data-action="next">${state.idx===v.length-1?'Terminer ✓':'Suivant →'}</button>`;
+}
+
+function ensureNav(){
+  if(document.getElementById('nav'))return;
+  const n=document.createElement('div');n.id='nav';n.className='nav';
+  n.innerHTML='<div class="nav-inner" id="nav-inner"></div>';
+  document.body.appendChild(n);
+}
+function removeNav(){const n=document.getElementById('nav');if(n)n.remove()}
+
+function pick(qid,idx){
+  const q=Q.find(x=>x.id===qid);const opt=q.opts[idx];
+  if(!state.answers[qid])state.answers[qid]={picked:[],other:''};
+  const a=state.answers[qid];
+  if(q.type==='multi'){
+    if(a.picked.includes(opt))a.picked=a.picked.filter(x=>x!==opt);
+    else a.picked.push(opt);
+  }else{
+    a.picked=[opt];
+  }
+  saveLocal();render();scheduleSync();
+}
+
+function pickOther(qid){
+  const q=Q.find(x=>x.id===qid);
+  if(!state.answers[qid])state.answers[qid]={picked:[],other:''};
+  const a=state.answers[qid];
+  if(q.type==='multi'){
+    if(a.picked.includes('__OTHER__')){a.picked=a.picked.filter(x=>x!=='__OTHER__');a.other=''}
+    else a.picked.push('__OTHER__');
+  }else{
+    a.picked=['__OTHER__'];
+  }
+  saveLocal();render();scheduleSync();
+  setTimeout(()=>{const i=document.getElementById('oth-'+qid);if(i)i.focus()},80);
+}
+
+function setOther(qid,val){
+  if(!state.answers[qid])state.answers[qid]={picked:[],other:''};
+  state.answers[qid].other=val;
+  saveLocal();scheduleSync();
+}
+
+function next(){state.idx++;saveLocal();render();window.scrollTo(0,0)}
+function prev(){state.idx--;saveLocal();render();window.scrollTo(0,0)}
+function reset(){if(confirm('Effacer toutes tes réponses et recommencer ?')){localStorage.removeItem(STORAGE_KEY);state.answers={};state.idx=-1;render()}}
+
+async function renderEnd(){
+  document.getElementById('bar').style.width='100%';
+  removeNav();
+  const ok=await syncNow({finalSubmit:true});
+  const body=formatAns();
+  document.getElementById('app').innerHTML=`
+    <div class="end">
+      <div style="font-size:56px;margin-bottom:8px">💛</div>
+      <h1>Merci !</h1>
+      ${ok?
+        `<div class="end-msg">✓ Tes réponses sont arrivées chez Christophe. Tu peux fermer cette page.</div>`:
+        `<div class="end-msg" style="background:#FFF3E0;color:var(--warn)">⚠️ Tes réponses sont sauvegardées sur ton téléphone. Ouvre cette page quand tu auras du réseau et elles partiront automatiquement.</div>`}
+      <p style="font-size:14px;margin-top:24px">Merci de prendre le temps. Ça va vraiment aider à faire une Lunia faite pour toi 🌙</p>
+      <details>
+        <summary>Voir mes réponses</summary>
+        <div class="summary-box"><pre>${esc(body)}</pre></div>
+      </details>
+      <button class="skip" data-action="reset" style="margin-top:32px">Recommencer</button>
+    </div>`;
+}
+
+function formatAns(){
+  const lines=['Lunia — réponses vague 1','Date : '+new Date().toLocaleDateString('fr-CA'),''];
+  visQ().forEach(q=>{
+    const a=state.answers[q.id];
+    lines.push('── Q'+q.id+' — '+q.title);
+    if(!a||(a.picked.length===0&&!a.other)){lines.push('  (sautée)')}
+    else{
+      a.picked.forEach(p=>{
+        if(p==='__OTHER__')lines.push('  ✓ Autre : '+(a.other||'(vide)'));
+        else lines.push('  ✓ '+p);
+      });
+    }
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+
+// ─── Event delegation ─────────────────────────────────────────────────────
+document.body.addEventListener('click',e=>{
+  const el=e.target.closest('[data-action]');
+  if(!el)return;
+  const a=el.dataset.action;
+  if(a==='start'){state.idx=0;saveLocal();render();scheduleSync()}
+  else if(a==='reset')reset();
+  else if(a==='pick')pick(el.dataset.qid,parseInt(el.dataset.idx,10));
+  else if(a==='pickother')pickOther(el.dataset.qid);
+  else if(a==='next')next();
+  else if(a==='prev')prev();
+});
+document.body.addEventListener('input',e=>{
+  const el=e.target.closest('[data-action="setother"]');
+  if(el)setOther(el.dataset.qid,el.value);
+});
+
+render();
+</script>
+</body>
+</html>
