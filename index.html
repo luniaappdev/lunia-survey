@@ -184,8 +184,20 @@ if(!SESSION_ID){
 function saveLocal(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
 
 // ─── Sync vers Supabase (debounced 800ms) ─────────────────────────────────
+// Stratégie : INSERT première fois (HTTP 201), PATCH ensuite (HTTP 204).
+// On évite le UPSERT (on_conflict) car PostgreSQL évalue les policies
+// INSERT ET UPDATE ensemble, ce qui casse avec une RLS SELECT stricte.
+// Un flag localStorage suit l'état "déjà inséré" pour cette session.
+
+const INSERTED_KEY=STORAGE_KEY+'-inserted';
 let syncTimer=null;
 let lastSyncStatus='';
+const COMMON_HEADERS={
+  'apikey':SUPABASE_KEY,
+  'Authorization':'Bearer '+SUPABASE_KEY,
+  'Content-Type':'application/json',
+  'Prefer':'return=minimal'
+};
 
 function setSyncStatus(text,cls){
   const el=document.getElementById('sync');
@@ -199,27 +211,47 @@ async function syncNow(opts){
   opts=opts||{};
   const finalSubmit=!!opts.finalSubmit;
   setSyncStatus(finalSubmit?'⏳ Envoi de tes réponses…':'⏳ Sauvegarde…','');
-  const body={
+  const fullBody={
     session_id:SESSION_ID,
     survey_id:SURVEY_ID,
     answers:state.answers,
     user_agent:navigator.userAgent.slice(0,200)
   };
-  if(finalSubmit)body.submitted_at=new Date().toISOString();
+  if(finalSubmit)fullBody.submitted_at=new Date().toISOString();
+
   try{
-    const res=await fetch(SUPABASE_URL+'/rest/v1/pilote_survey_responses?on_conflict=session_id',{
-      method:'POST',
-      headers:{
-        'apikey':SUPABASE_KEY,
-        'Authorization':'Bearer '+SUPABASE_KEY,
-        'Content-Type':'application/json',
-        'Prefer':'resolution=merge-duplicates,return=minimal'
-      },
-      body:JSON.stringify(body)
-    });
+    let inserted=localStorage.getItem(INSERTED_KEY)==='1';
+
+    // Première sync : INSERT
+    if(!inserted){
+      const res=await fetch(SUPABASE_URL+'/rest/v1/pilote_survey_responses',{
+        method:'POST',headers:COMMON_HEADERS,body:JSON.stringify(fullBody)
+      });
+      if(res.ok){
+        localStorage.setItem(INSERTED_KEY,'1');
+        setSyncStatus(finalSubmit?'✓ Réponses envoyées — merci 💛':'✓ Sauvegardé','ok');
+        return true;
+      }
+      // 409 Conflict = ligne existe déjà (autre device, retry, etc.) → bascule en PATCH
+      if(res.status===409){
+        localStorage.setItem(INSERTED_KEY,'1');
+        inserted=true;
+      }else{
+        const t=await res.text();
+        throw new Error('INSERT HTTP '+res.status+' '+t.slice(0,100));
+      }
+    }
+
+    // Sync subséquente : PATCH (UPDATE WHERE session_id)
+    const patchBody={answers:fullBody.answers,user_agent:fullBody.user_agent};
+    if(fullBody.submitted_at)patchBody.submitted_at=fullBody.submitted_at;
+    const res=await fetch(
+      SUPABASE_URL+'/rest/v1/pilote_survey_responses?session_id=eq.'+SESSION_ID,
+      {method:'PATCH',headers:COMMON_HEADERS,body:JSON.stringify(patchBody)}
+    );
     if(!res.ok){
       const t=await res.text();
-      throw new Error('HTTP '+res.status+' '+t.slice(0,100));
+      throw new Error('PATCH HTTP '+res.status+' '+t.slice(0,100));
     }
     setSyncStatus(finalSubmit?'✓ Réponses envoyées — merci 💛':'✓ Sauvegardé','ok');
     return true;
