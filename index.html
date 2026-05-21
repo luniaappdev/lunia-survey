@@ -119,8 +119,18 @@ summary{cursor:pointer;color:var(--muted);font-size:14px;padding:8px 0}
 // ─── Supabase config (clés PUBLIQUES — sb_publishable_ OK dans bundle) ─────
 const SUPABASE_URL='https://hioaymokoffwmhbieitc.supabase.co';
 const SUPABASE_KEY='sb_publishable_gxvhPTChSWIvgkQm7c5mPw_b3VVJhSU';
-const SURVEY_ID='vague1-2026-05-20';
-const STORAGE_KEY='lunia-vague1-2026';
+
+// ─── Test mode : ajoute ?test=1 à l'URL pour tester sans polluer la pilote ─
+const IS_TEST=new URLSearchParams(location.search).has('test');
+const SURVEY_ID=IS_TEST?'test-vague1-2026-05-20':'vague1-2026-05-20';
+const STORAGE_KEY=IS_TEST?'lunia-vague1-2026-test':'lunia-vague1-2026';
+
+if(IS_TEST){
+  const b=document.createElement('div');
+  b.style.cssText='background:#FFF3E0;padding:10px 14px;text-align:center;font-size:13px;color:#B8860B;border-bottom:1px solid #E8E2D8;font-weight:500';
+  b.innerHTML='🧪 <strong>MODE TEST</strong> — tes réponses sont taggées « test » et n\'affectent pas les données pilote';
+  document.body.insertBefore(b,document.body.firstChild);
+}
 
 // ─── Questions ────────────────────────────────────────────────────────────
 const Q=[
